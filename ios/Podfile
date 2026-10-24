@@ -40,5 +40,20 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # permission_handler 12 disables iOS permissions unless their macros are
+    # explicitly enabled. The SIP/WebRTC call requests microphone access
+    # before registering, so leaving this disabled makes iOS close the call
+    # immediately while Android continues to work.
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_CAMERA=1',
+        'PERMISSION_MICROPHONE=1',
+        'PERMISSION_PHOTOS=1',
+        'PERMISSION_SPEECH_RECOGNIZER=1',
+        'PERMISSION_LOCATION=1',
+      ]
+    end
   end
 end
