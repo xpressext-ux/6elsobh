@@ -711,6 +711,7 @@ class NotificationHelper {
         );
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
+      iOS: DarwinNotificationDetails(sound: 'notification.wav', presentSound: true),
     );
     await fln.show(
       0,
@@ -748,6 +749,7 @@ class NotificationHelper {
         );
     NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
+      iOS: const DarwinNotificationDetails(sound: 'notification.wav', presentSound: true),
     );
     await fln.show(
       0,
@@ -795,6 +797,7 @@ class NotificationHelper {
         );
     final NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
+      iOS: const DarwinNotificationDetails(sound: 'notification.wav', presentSound: true),
     );
     await fln.show(
       0,
