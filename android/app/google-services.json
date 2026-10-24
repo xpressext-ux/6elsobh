@@ -1,0 +1,34 @@
+{
+  "project_info": {
+    "project_number": "786724985028",
+    "firebase_url": "https://orbitxstore-default-rtdb.firebaseio.com",
+    "project_id": "orbitxstore",
+    "storage_bucket": "orbitxstore.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:786724985028:android:04874b85e49d10553d5191",
+        "android_client_info": {
+          "package_name": "com.ammart.shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALWIsJ0c7Y8lQi4oeTIQByZp00tUpkFos"
+        },
+        {
+          "current_key": "AIzaSyADzO5T1QDlLpaMSQou-SuY_bI9uCautLM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      },
+      "admob_app_id": "ca-app-pub-1903132182555073~6270797283"
+    }
+  ],
+  "configuration_version": "1"
+}

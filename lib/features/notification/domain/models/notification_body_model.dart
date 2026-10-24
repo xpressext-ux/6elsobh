@@ -1,0 +1,199 @@
+enum NotificationType{
+  message,
+  order,
+  general,
+  // ignore: constant_identifier_names
+  referral_code,
+  otp,
+  // ignore: constant_identifier_names
+  add_fund,
+  block,
+  unblock,
+  //ignore: constant_identifier_names
+  referral_earn,
+  //ignore: constant_identifier_names
+  cashback,
+  //ignore: constant_identifier_names
+  loyalty_point,
+  trip,
+  //ignore: constant_identifier_names
+  ride_request,
+  //ignore: constant_identifier_names
+  booking_status,
+  //ignore: constant_identifier_names
+  booking_reschedule,
+  //ignore: constant_identifier_names
+  booking_location,
+  //ignore: constant_identifier_names
+  booking_edit,
+  //ignore: constant_identifier_names
+  serviceman_assigned,
+  //ignore: constant_identifier_names
+  custom_service_bid,
+  //ignore: constant_identifier_names
+  custom_service_request_posted,
+  //ignore: constant_identifier_names
+  custom_service_bid_withdrawn,
+  //ignore: constant_identifier_names
+  bogo_offer,
+  //ignore: constant_identifier_names
+  happy_hour,
+}
+
+class NotificationBodyModel {
+  NotificationType? notificationType;
+  int? orderId;
+  int? adminId;
+  int? deliverymanId;
+  int? restaurantId;
+  String? type;
+  int? conversationId;
+  int? index;
+  String? image;
+  String? name;
+  String? receiverType;
+  int? providerId;
+  int? servicemanId;
+  String? action;
+  String? nextLevel;
+  String? rewardType;
+  String? rewardAmount;
+  String? rideRequestId;
+  String? bookingId;
+  String? repeatBookingType;
+  String? bookingType;
+  String? postId;
+  int? moduleId;
+
+  /// The offer a BOGO notification points at — an id or a slug, either of which the
+  /// details endpoint accepts. Empty on the enrolment pushes the platform sends today,
+  /// so the tap falls back to the offer list.
+  String? bogoOfferId;
+
+
+  NotificationBodyModel({
+    this.notificationType,
+    this.orderId,
+    this.adminId,
+    this.deliverymanId,
+    this.restaurantId,
+    this.type,
+    this.conversationId,
+    this.index,
+    this.image,
+    this.name,
+    this.receiverType,
+    this.providerId,
+    this.servicemanId,
+    this.rideRequestId,
+    this.action,
+    this.nextLevel,
+    this.rewardAmount,
+    this.rewardType,
+    this.bookingId,
+    this.bookingType,
+    this.postId,
+    this.repeatBookingType,
+    this.moduleId,
+    this.bogoOfferId,
+  });
+
+  NotificationBodyModel.fromJson(Map<String, dynamic> json) {
+    notificationType = convertToEnum(json['order_notification']);
+    orderId = json['order_id'];
+    adminId = json['admin_id'];
+    deliverymanId = json['deliveryman_id'];
+    restaurantId = json['restaurant_id'];
+    providerId = int.tryParse(json['provider_id'].toString());
+    servicemanId = json['serviceman_id'];
+    type = json['type'];
+    conversationId = json['conversation_id'];
+    index = json['index'];
+    image = json['image'];
+    name = json['name'];
+    receiverType = json['receiver_type'];
+    rideRequestId = json['ride_request_id'].toString();
+    action = json['action'];
+    nextLevel = json['next_level'];
+    rewardType = json['reward_type'];
+    rewardAmount = json['reward_amount'];
+    bookingId = json['booking_id'];
+    repeatBookingType = json['repeat_type'];
+    bookingType = json['booking_type'];
+    postId = json['post_id'];
+    moduleId = int.tryParse('${json['module_id']}');
+    bogoOfferId = firstNonEmptyOf(json, const ['data_id', 'bogo_offer_id', 'offer_slug', 'offer_id']);
+  }
+
+  /// `data_id` is the platform's shared id slot and comes first; the rest cover a payload
+  /// that names the offer directly. Every key in the block can arrive as an empty string
+  /// rather than absent, so emptiness is what disqualifies a value, not null alone.
+  static String? firstNonEmptyOf(Map<String, dynamic> json, List<String> keys) {
+    for(final String key in keys) {
+      final String value = '${json[key] ?? ''}'.trim();
+      if(value.isNotEmpty && value != 'null') {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> data = <String, dynamic>{};
+    data['order_notification'] = notificationType.toString();
+    data['order_id'] = orderId;
+    data['admin_id'] = adminId;
+    data['deliveryman_id'] = deliverymanId;
+    data['restaurant_id'] = restaurantId;
+    data['provider_id'] = providerId;
+    data['serviceman_id'] = servicemanId;
+    data['type'] = type;
+    data['conversation_id'] = conversationId;
+    data['index'] = index;
+    data['image'] = image;
+    data['name'] = name;
+    data['receiver_type'] = receiverType;
+    data['ride_request_id'] = rideRequestId;
+    data['action'] = action;
+    data['next_level'] = nextLevel;
+    data['reward_type'] = rewardType;
+    data['reward_amount'] = rewardAmount;
+    data['booking_id'] = bookingId;
+    data['repeat_type'] = repeatBookingType;
+    data['booking_type'] = bookingType;
+    data['post_id'] = postId;
+    data['module_id'] = moduleId;
+    data['data_id'] = bogoOfferId;
+    return data;
+  }
+
+  NotificationType convertToEnum(String? enumString) {
+    final Map<String, NotificationType> enumMap = {
+      NotificationType.general.toString(): NotificationType.general,
+      NotificationType.order.toString(): NotificationType.order,
+      NotificationType.message.toString(): NotificationType.message,
+      NotificationType.referral_code.toString(): NotificationType.referral_code,
+      NotificationType.otp.toString(): NotificationType.otp,
+      NotificationType.add_fund.toString(): NotificationType.add_fund,
+      NotificationType.block.toString(): NotificationType.block,
+      NotificationType.unblock.toString(): NotificationType.unblock,
+      NotificationType.referral_earn.toString(): NotificationType.referral_earn,
+      NotificationType.cashback.toString(): NotificationType.cashback,
+      NotificationType.loyalty_point.toString(): NotificationType.loyalty_point,
+      NotificationType.trip.toString(): NotificationType.trip,
+      NotificationType.ride_request.toString(): NotificationType.ride_request,
+      NotificationType.booking_status.toString(): NotificationType.booking_status,
+      NotificationType.booking_reschedule.toString(): NotificationType.booking_reschedule,
+      NotificationType.booking_location.toString(): NotificationType.booking_location,
+      NotificationType.booking_edit.toString(): NotificationType.booking_edit,
+      NotificationType.serviceman_assigned.toString(): NotificationType.serviceman_assigned,
+      NotificationType.custom_service_bid.toString(): NotificationType.custom_service_bid,
+      NotificationType.custom_service_request_posted.toString(): NotificationType.custom_service_request_posted,
+      NotificationType.custom_service_bid_withdrawn.toString(): NotificationType.custom_service_bid_withdrawn,
+      NotificationType.bogo_offer.toString(): NotificationType.bogo_offer,
+    };
+
+    return enumMap[enumString] ?? NotificationType.general;
+  }
+
+}

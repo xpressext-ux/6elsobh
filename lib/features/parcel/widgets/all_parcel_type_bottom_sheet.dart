@@ -1,0 +1,69 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:sixam_mart/features/parcel/controllers/parcel_controller.dart';
+import 'package:sixam_mart/features/parcel/widgets/bottom_sheet_header_widget.dart';
+import 'package:sixam_mart/features/parcel/widgets/parcel_category_card_widget.dart';
+import 'package:sixam_mart/features/parcel/widgets/set_parcel_information_bottom_sheet.dart';
+import 'package:sixam_mart/features/parcel/widgets/parcel_service_status_widget.dart';
+import 'package:sixam_mart/helper/responsive_helper.dart';
+import 'package:sixam_mart/util/dimensions.dart';
+
+class AllParcelTypeBottomSheet extends StatelessWidget {
+  const AllParcelTypeBottomSheet({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    bool isDesktop = ResponsiveHelper.isDesktop(context);
+    return Container(
+      width: 550,
+      padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeDefault),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(Dimensions.radiusExtraLarge)),
+      ),
+      child: GetBuilder<ParcelController>(builder: (parcelController) {
+        final categories = parcelController.parcelCategoryList ?? [];
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+
+          BottomSheetHeaderWidget(title: 'all_parcel_type'.tr),
+          const SizedBox(height: Dimensions.paddingSizeLarge),
+
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeLarge),
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isDesktop ? 3 : 2,
+                  crossAxisSpacing: Dimensions.paddingSizeSmall,
+                  mainAxisSpacing: Dimensions.paddingSizeSmall,
+                  mainAxisExtent: 90,
+                ),
+                itemCount: categories.length,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemBuilder: (context, index) {
+                  return ParcelCategoryCardWidget(
+                    image: '${categories[index].imageFullUrl}',
+                    itemName: categories[index].name ?? '',
+                    description: categories[index].description ?? '',
+                    colorIndex: index,
+                    onTap: () async {
+                      if (isParcelServiceClosed()) {
+                        await showParcelServiceClosedDialog(context);
+                        return;
+                      }
+                      Get.back();
+                      SetParcelInformationBottomSheet.startFromCategory(categories[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: Dimensions.paddingSizeDefault),
+        ]);
+      }),
+    );
+  }
+}

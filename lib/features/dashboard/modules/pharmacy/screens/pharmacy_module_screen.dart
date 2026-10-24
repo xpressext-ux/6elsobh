@@ -1,0 +1,423 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:sixam_mart/common/widgets/lazy_sliver.dart';
+import 'package:sixam_mart/common/widgets/title_widget.dart';
+import 'package:sixam_mart/features/banner/controllers/banner_controller.dart';
+import 'package:sixam_mart/features/bogo_offer/controllers/bogo_offer_controller.dart';
+import 'package:sixam_mart/features/bundle/controllers/bundle_controller.dart';
+import 'package:sixam_mart/features/bundle/widgets/bundle_section_widget.dart';
+import 'package:sixam_mart/features/category/controllers/category_controller.dart';
+import 'package:sixam_mart/features/dashboard/modules/pharmacy/widgets/quick_delivery_card.dart';
+import 'package:sixam_mart/features/dashboard/modules/pharmacy/widgets/shop_by_condition.dart';
+import 'package:sixam_mart/features/dashboard/widgets/banner_slider.dart';
+import 'package:sixam_mart/features/dashboard/widgets/bogo_offer_card_widget.dart';
+import 'package:sixam_mart/features/dashboard/widgets/category_section.dart';
+import 'package:sixam_mart/features/dashboard/widgets/explore_restaurant_section.dart';
+import 'package:sixam_mart/features/dashboard/widgets/featured_restaurant.dart';
+import 'package:sixam_mart/features/dashboard/widgets/just_for_you_section.dart';
+import 'package:sixam_mart/features/dashboard/widgets/last_orders_section_widget.dart';
+import 'package:sixam_mart/features/dashboard/widgets/last_visited_store_section.dart';
+import 'package:sixam_mart/features/dashboard/widgets/search_header_widget.dart';
+import 'package:sixam_mart/features/dashboard/widgets/sliver_gap.dart';
+import 'package:sixam_mart/features/dashboard/widgets/top_picks_near_you_widget.dart';
+import 'package:sixam_mart/features/home/controllers/advertisement_controller.dart';
+import 'package:sixam_mart/features/home/widgets/views/promotional_banner_view.dart';
+import 'package:sixam_mart/features/item/controllers/campaign_controller.dart';
+import 'package:sixam_mart/features/item/controllers/item_controller.dart';
+import 'package:sixam_mart/features/order/controllers/order_controller.dart';
+import 'package:sixam_mart/features/reels/controllers/reels_controller.dart';
+import 'package:sixam_mart/features/reels/widgets/reels_section_widget.dart';
+import 'package:sixam_mart/features/splash/controllers/splash_controller.dart';
+import 'package:sixam_mart/features/store/controllers/store_controller.dart';
+import 'package:sixam_mart/helper/auth_helper.dart';
+import 'package:sixam_mart/helper/module_helper.dart';
+import 'package:sixam_mart/util/app_constants.dart';
+import 'package:sixam_mart/util/dimensions.dart';
+import 'package:sliver_tools/sliver_tools.dart';
+
+class PharmacyModuleScreen extends StatefulWidget {
+  final Key searchHeaderKey;
+  final Key exploreRestaurantKey;
+  final ScrollController scrollController;
+  final bool isSearchPinned;
+  const PharmacyModuleScreen({
+    super.key,
+    required this.searchHeaderKey,
+    required this.exploreRestaurantKey,
+    required this.scrollController,
+    this.isSearchPinned = false,
+  });
+
+  @override
+  State<PharmacyModuleScreen> createState() => _PharmacyModuleScreenState();
+}
+
+class _PharmacyModuleScreenState extends State<PharmacyModuleScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return MultiSliver(
+      children: [
+        // Section: search and quick filters
+        SliverToBoxAdapter(
+          child: Visibility(
+            visible: !widget.isSearchPinned,
+            maintainSize: true,
+            maintainState: true,
+            maintainAnimation: true,
+            child: SearchAndQuickFilterWidget(
+              key: widget.searchHeaderKey,
+              isPinned: false,
+            ),
+          ),
+        ),
+
+        sliverGepY(value: Dimensions.paddingSizeExtraSmall),
+
+        // shop by condition — section + gap collapse when empty
+        GetBuilder<ItemController>(
+          builder: (controller) {
+            final visible =
+                controller.commonConditions == null ||
+                controller.commonConditions!.isNotEmpty;
+            return _conditionalSection(
+              visible: visible,
+              slivers: [
+                ShopByConditionSection(title: 'shop_by_condition'.tr),
+                sliverGepY(value: Dimensions.paddingSizeExtraOverLarge),
+              ],
+            );
+          },
+        ),
+
+        // category — whole gradient block + gap collapse when empty
+        GetBuilder<CategoryController>(
+          builder: (controller) {
+            final visible =
+                controller.categoryList == null ||
+                controller.categoryList!.isNotEmpty;
+            return _conditionalSection(
+              visible: visible,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: Dimensions.paddingSizeDefault,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(Dimensions.radiusLarge),
+                      ),
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.blueAccent.withAlpha(30),
+                          Colors.blueAccent.withAlpha(5),
+                        ],
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: Dimensions.paddingSizeDefault,
+                          ),
+                          child: TitleWidget(title: 'shop_by_categories'.tr),
+                        ),
+                        const SizedBox(height: Dimensions.paddingSizeDefault),
+                        const CategorySection(asList: false),
+                      ],
+                    ),
+                  ),
+                ),
+                sliverGepY(value: Dimensions.paddingSizeExtraSmall),
+              ],
+            );
+          },
+        ),
+
+        LazySliver(
+          // Same guard the section applies before rendering — last orders only exist
+          // when repeat ordering is on.
+          onReveal: () {
+            if (AuthHelper.isLoggedIn() &&
+                Get.find<SplashController>().configModel?.repeatOrderOption ==
+                    1) {
+              Get.find<OrderController>().getLastOrders(isHome: false);
+            }
+          },
+          sliver: GetBuilder<OrderController>(
+            builder: (controller) {
+              // null means "not fetched yet" and must keep its height while the section
+              // loads; only a loaded-but-empty list collapses.
+              final visible =
+                  controller.lastOrders == null ||
+                  controller.lastOrders!.isNotEmpty;
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  const SliverToBoxAdapter(
+                    child: LastOrdersSectionWidget(
+                      moduleType: AppConstants.pharmacy,
+                    ),
+                  ),
+                  sliverGepY(value: Dimensions.paddingSizeDefault),
+                ],
+              );
+            },
+          ),
+        ),
+
+        LazySliver(
+          onReveal: () {
+            if (AuthHelper.isLoggedIn() &&
+                Get.find<SplashController>().configModel?.repeatOrderOption ==
+                    1) {
+              Get.find<StoreController>().getVisitAgainStoreList(
+                fromModule: true,
+              );
+            }
+          },
+          sliver: const SliverToBoxAdapter(child: LastVisitedStoreSection()),
+        ),
+        sliverGepY(value: Dimensions.paddingSizeDefault),
+
+        // banner
+        LazySliver(
+          onReveal: () => Get.find<BannerController>().getBannerList(true),
+          sliver: GetBuilder<BannerController>(
+            builder: (controller) {
+              final visible =
+                  controller.bannerImageList == null ||
+                  controller.bannerImageList!.isNotEmpty;
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  const SliverToBoxAdapter(child: BannerSliderWidget()),
+                  sliverGepY(value: Dimensions.paddingSizeDefault),
+                ],
+              );
+            },
+          ),
+        ),
+
+        LazySliver(
+          onReveal: () {
+            Get.find<StoreController>().getVerifiedStoreList(
+              reload: true,
+              notify: false,
+            );
+          },
+          sliver: GetBuilder<StoreController>(
+            builder: (controller) {
+              final bool verifiedVisible =
+                  controller.verifiedStoreList == null ||
+                  controller.verifiedStoreList!.isNotEmpty;
+              return _conditionalSection(
+                visible: verifiedVisible,
+                slivers: [
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: Dimensions.paddingSizeDefault),
+                  ),
+                  SliverToBoxAdapter(
+                    child: TopPicksNearYouWidget(
+                      title: "verified_pharmacies".tr,
+                      subTitle: "secure_buying_experience".tr,
+                      isVerifiedStore: true,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // Section: featured stores list
+        LazySliver(
+          onReveal: () =>
+              Get.find<AdvertisementController>().getAdvertisementList(),
+          sliver: GetBuilder<AdvertisementController>(
+            builder: (controller) {
+              final visible =
+                  controller.advertisementList == null ||
+                  controller.advertisementList!.isNotEmpty;
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  sliverPadX(child: const FeaturedRestaurant()),
+                  sliverGepY(value: Dimensions.paddingSizeDefault),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // Section: BOGO offers — the whole block hides itself when no offer is live
+        LazySliver(
+          onReveal: () => Get.find<BogoOfferController>().getBogoHomeData(),
+          sliver: GetBuilder<BogoOfferController>(
+            builder: (controller) {
+              return _conditionalSection(
+                visible: controller.showHomeCard,
+                slivers: [
+                  sliverGepY(value: Dimensions.paddingSizeDefault),
+                  const SliverToBoxAdapter(child: BogoOfferCardWidget()),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // reels
+        LazySliver(
+          onReveal: () => Get.find<ReelsController>().getReelsList(offset: 1),
+          sliver: GetBuilder<ReelsController>(
+            builder: (controller) {
+              final visible =
+                  (controller.reelsList == null && controller.isLoading) ||
+                  (controller.reelsList != null &&
+                      controller.reelsList!.isNotEmpty);
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  const SliverToBoxAdapter(child: ReelsSectionWidget()),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // Section: Recommended For You
+        LazySliver(
+          onReveal: () => Get.find<StoreController>().getRecommendedStoreList(),
+          sliver: GetBuilder<StoreController>(
+            builder: (controller) {
+              final visible =
+                  controller.recommendedStoreList == null ||
+                  controller.recommendedStoreList!.isNotEmpty;
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: TopPicksNearYouWidget(
+                      title: "recommended_for_you".tr,
+                      isRecommended: true,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+
+        LazySliver(
+          onReveal: () {
+            Get.find<CampaignController>().getBasicCampaignList(true);
+            Get.find<CampaignController>().getItemCampaignList(true);
+          },
+          sliver: GetBuilder<CampaignController>(
+            builder: (controller) {
+              final visible =
+                  controller.itemCampaignList == null ||
+                  controller.itemCampaignList!.isNotEmpty;
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  sliverGepY(value: Dimensions.paddingSizeSmall),
+                  const SliverToBoxAdapter(child: JustForYouSection()),
+                ],
+              );
+            },
+          ),
+        ),
+        sliverGepY(value: Dimensions.paddingSizeDefault),
+
+        // Section: bundle items — the block hides itself when the module has no
+        // bundles, which is also what the endpoint returns when the feature is off.
+        LazySliver(
+          onReveal: () {
+            if (ModuleHelper.isBundleEnabled(
+              moduleType: AppConstants.pharmacy,
+            )) {
+              Get.find<BundleController>().getBundleHome();
+            }
+          },
+          sliver: GetBuilder<BundleController>(
+            builder: (controller) {
+              return _conditionalSection(
+                visible: controller.homeBundles?.isNotEmpty ?? false,
+                slivers: [
+                  const SliverToBoxAdapter(child: BundleSectionWidget()),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // Section: self care / OTC — leading + trailing gap collapse with it
+        LazySliver(
+          onReveal: () =>
+              Get.find<ItemController>().getBasicMedicine(true, false),
+          sliver: GetBuilder<ItemController>(
+            builder: (controller) {
+              final products = controller.basicMedicineModel?.products;
+              final visible = products == null || products.isNotEmpty;
+              return _conditionalSection(
+                visible: visible,
+                slivers: [
+                  sliverGepY(value: Dimensions.paddingSizeDefault),
+                  SliverToBoxAdapter(
+                    child: QuickDeliveryCardSection(
+                      title: 'self_care_otc'.tr,
+                      subTitle: 'no_prescription_required'.tr,
+                    ),
+                  ),
+                  sliverGepY(value: Dimensions.paddingSizeDefault),
+                ],
+              );
+            },
+          ),
+        ),
+
+        // Section: promotional banner
+        LazySliver(
+          onReveal: () =>
+              Get.find<BannerController>().getPromotionalBannerList(true),
+          sliver: const PromotionalBannerSliver(),
+        ),
+        sliverGepY(value: Dimensions.paddingSizeDefault),
+
+        SliverToBoxAdapter(
+          child: Container(
+            height: 5,
+            width: double.infinity,
+            color: Theme.of(context).disabledColor.withValues(alpha: 0.2),
+          ),
+        ),
+        sliverGepY(value: Dimensions.paddingSizeDefault),
+
+        // Section: explore restaurants
+        LazySliver(
+        onReveal: () => Get.find<StoreController>().getFreshModuleStoreList(),
+          sliver: ExploreRestaurantSection(
+            title: 'explore_pharmacy'.tr,
+            exploreRestaurantKey: widget.exploreRestaurantKey,
+            scrollController: widget.scrollController,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Renders a section together with its trailing/leading spacing, or nothing at
+// all — dropping the gap — when the section has loaded but is empty. Always
+// returns exactly one sliver so it stays valid inside the parent MultiSliver.
+Widget _conditionalSection({
+  required bool visible,
+  required List<Widget> slivers,
+}) {
+  return visible
+      ? MultiSliver(children: slivers)
+      : const SliverToBoxAdapter(child: SizedBox.shrink());
+}

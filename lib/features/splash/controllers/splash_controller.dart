@@ -1,0 +1,659 @@
+import 'dart:async';
+
+import 'package:get/get.dart';
+import 'package:sixam_mart/api/api_client.dart';
+import 'package:sixam_mart/common/enums/data_source_enum.dart';
+import 'package:sixam_mart/common/models/config_model.dart' hide DownloadUserAppLinks;
+import 'package:sixam_mart/common/models/module_model.dart';
+import 'package:sixam_mart/common/models/response_model.dart';
+import 'package:sixam_mart/common/widgets/custom_snackbar.dart';
+import 'package:sixam_mart/features/address/controllers/address_controller.dart';
+import 'package:sixam_mart/features/auth/controllers/auth_controller.dart';
+import 'package:sixam_mart/features/banner/controllers/banner_controller.dart';
+import 'package:sixam_mart/features/cart/controllers/cart_controller.dart';
+import 'package:sixam_mart/features/category/controllers/category_controller.dart';
+import 'package:sixam_mart/features/favourite/controllers/favourite_controller.dart';
+import 'package:sixam_mart/features/flash_sale/controllers/flash_sale_controller.dart';
+import 'package:sixam_mart/features/home/controllers/home_controller.dart';
+import 'package:sixam_mart/features/home/screens/home_screen.dart';
+import 'package:sixam_mart/features/item/controllers/campaign_controller.dart';
+import 'package:sixam_mart/features/item/controllers/item_controller.dart';
+import 'package:sixam_mart/features/notification/domain/models/notification_body_model.dart';
+import 'package:sixam_mart/features/pro/controllers/pro_controller.dart';
+import 'package:sixam_mart/features/profile/controllers/profile_controller.dart';
+import 'package:sixam_mart/features/rental_module/rental_cart_screen/controllers/taxi_cart_controller.dart';
+import 'package:sixam_mart/features/rental_module/rental_favourite/controllers/taxi_favourite_controller.dart';
+import 'package:sixam_mart/features/service_module/booking_details/controllers/booking_controller.dart';
+import 'package:sixam_mart/features/service_module/service_cart/controllers/service_cart_controller.dart';
+import 'package:sixam_mart/features/splash/domain/services/splash_service_interface.dart';
+import 'package:sixam_mart/features/store/controllers/store_controller.dart';
+import 'package:sixam_mart/features/bogo_offer/controllers/bogo_offer_controller.dart';
+import 'package:sixam_mart/features/bundle/controllers/bundle_controller.dart';
+import 'package:sixam_mart/features/reels/controllers/reels_controller.dart';
+import 'package:sixam_mart/features/order/controllers/order_controller.dart';
+import 'package:sixam_mart/features/home/controllers/advertisement_controller.dart';
+import 'package:sixam_mart/features/brands/controllers/brands_controller.dart';
+import 'package:sixam_mart/helper/auth_helper.dart';
+import 'package:sixam_mart/helper/maintance_helper.dart';
+import 'package:sixam_mart/helper/notification_topic_helper.dart';
+import 'package:sixam_mart/helper/responsive_helper.dart';
+import 'package:sixam_mart/helper/route_helper.dart';
+import 'package:sixam_mart/helper/shallow_route_helper.dart';
+import 'package:sixam_mart/helper/splash_route_helper.dart';
+import 'package:sixam_mart/util/app_constants.dart';
+import 'package:universal_html/html.dart' as html;
+
+import '../domain/models/app_download_section_model.dart';
+
+class SplashController extends GetxController implements GetxService {
+  final SplashServiceInterface splashServiceInterface;
+  SplashController({required this.splashServiceInterface});
+
+  ConfigModel? _configModel;
+  ConfigModel? get configModel => _configModel;
+
+  bool get proStaus => _configModel?.proMemberStatus ?? false;
+
+  bool _firstTimeConnectionCheck = true;
+  bool get firstTimeConnectionCheck => _firstTimeConnectionCheck;
+
+  bool _hasConnection = true;
+  bool get hasConnection => _hasConnection;
+
+  ModuleModel? _module;
+  ModuleModel? get module => _module;
+
+  ModuleModel? _cacheModule;
+  ModuleModel? get cacheModule => _cacheModule;
+
+  List<ModuleModel>? _moduleList;
+  List<ModuleModel>? get moduleList => _moduleList;
+
+  int _moduleIndex = 0;
+  int get moduleIndex => _moduleIndex;
+
+  Map<String, dynamic>? _data = {};
+
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  int _selectedModuleIndex = 0;
+  int get selectedModuleIndex => _selectedModuleIndex;
+
+  // Guards against rapid/continuous module switching: every switch bumps the token
+  // so a stale switch's async continuation can't clear caches or load data for a
+  // module that's no longer selected, and the heavy data load is debounced so only
+  // the module the user lands on actually fetches.
+  int _moduleSwitchToken = 0;
+  Timer? _moduleLoadDebounce;
+
+  bool _savedCookiesData = false;
+  bool get savedCookiesData => _savedCookiesData;
+
+  bool _webSuggestedLocation = false;
+  bool get webSuggestedLocation => _webSuggestedLocation;
+
+  bool _isRefreshing = false;
+  bool get isRefreshing => _isRefreshing;
+
+  bool _showReferBottomSheet = false;
+  bool get showReferBottomSheet => _showReferBottomSheet;
+
+  bool _showRenewBottomSheet = true;
+  bool get showRenewBottomSheet => _showRenewBottomSheet;
+
+  DateTime get currentTime => DateTime.now();
+
+  bool _showPaymentIncompleteBottomSheet = true;
+  bool get showPaymentIncompleteBottomSheet => _showPaymentIncompleteBottomSheet;
+
+  Uri? _deeplinkRoute;
+  Uri? get deeplinkRoute => _deeplinkRoute;
+
+  // Latch so cold-start splash routing (notification target OR normal home) runs
+  // exactly once, no matter how many local/client config responses race. Guards ONLY
+  // the splash user/notification routing — never maintenance/demo/main-function routes.
+  bool _splashRouted = false;
+
+  AppDownloadSectionModel? _appDownloadSection;
+  AppDownloadSectionModel? get appDownloadSection => _appDownloadSection;
+
+  void togglePaymentIncompleteBottomSheet(bool status) {
+    _showPaymentIncompleteBottomSheet = status;
+  }
+
+  bool getPaymentIncompleteSheetStatus() {
+    return splashServiceInterface.getPaymentIncompleteBottomSheetStatus();
+  }
+
+  void savePaymentIncompleteSheetStatus(bool hide) {
+    splashServiceInterface.savePaymentIncompleteBottomSheetStatus(hide);
+  }
+
+  void selectModuleIndex(int index, {bool canUpdate = true}) {
+    _selectedModuleIndex = index;
+    if(canUpdate) {
+      update();
+    }
+  }
+
+  void selectModuleByTabIndex(int tabIndex) {
+    selectModuleIndex(tabIndex);
+    if(tabIndex == 0) return;
+    final int moduleListIndex = tabIndex - 1;
+    if(_moduleList != null && moduleListIndex < _moduleList!.length) {
+      switchModule(moduleListIndex, true);
+    }
+  }
+
+  /// Selecting the Home tab. Mirrors the back-press (PopScope) behaviour: when not
+  /// locked to a single module, drop the active module and reset store data so Home
+  /// shows the multi-module landing instead of staying scoped to the last module.
+  void selectHomeModule() {
+    selectModuleIndex(0);
+    if(!ResponsiveHelper.isDesktop(Get.context) && _module != null && _configModel?.module == null
+        && _moduleList != null && _moduleList!.length != 1) {
+      removeModule();
+      Get.find<StoreController>().resetStoreData();
+    }
+  }
+
+  void setDeeplink(Uri? route) {
+    _deeplinkRoute = route;
+    // update();
+  }
+
+  Future<void> getConfigData({bool handleMaintenanceMode = false, NotificationBodyModel? notificationBody, bool loadModuleData = false, bool loadLandingData = false,
+    DataSourceEnum source = DataSourceEnum.local, bool fromMainFunction = false, bool fromDemoReset = false, bool canRoute = true, bool fromSplash = false}) async {
+    _hasConnection = true;
+    _moduleIndex = 0;
+    Response response;
+    if(source == DataSourceEnum.local && !fromDemoReset) {
+      response = await splashServiceInterface.getConfigData(source: DataSourceEnum.local);
+      // Cached config can contain an old maintenance target list. Do not route
+      // from it; wait for the fresh server response before showing maintenance.
+      _handleConfigResponse(response, handleMaintenanceMode, loadModuleData, loadLandingData, fromMainFunction, fromDemoReset, notificationBody, false, fromSplash);
+      getConfigData(handleMaintenanceMode: handleMaintenanceMode, loadModuleData: loadModuleData, loadLandingData: loadLandingData, source: DataSourceEnum.client, notificationBody: notificationBody, canRoute: canRoute, fromSplash: fromSplash);
+
+    } else {
+      response = await splashServiceInterface.getConfigData(source: DataSourceEnum.client);
+      _handleConfigResponse(response, handleMaintenanceMode, loadModuleData, loadLandingData, fromMainFunction, fromDemoReset, notificationBody, canRoute, fromSplash);
+    }
+
+  }
+
+  Future<void> _handleConfigResponse(Response response, bool handleMaintenanceMode, bool loadModuleData, bool loadLandingData, bool fromMainFunction, bool fromDemoReset, NotificationBodyModel? notificationBody, bool canRoute, bool fromSplash) async {
+    if(response.statusCode == 200) {
+      _data = response.body;
+      _configModel = ConfigModel.fromJson(response.body);
+      if(_configModel!.module != null) {
+        setModule(_configModel!.module);
+      }else if(GetPlatform.isWeb || (loadModuleData && _module != null)) {
+        setModule(GetPlatform.isWeb ? splashServiceInterface.getModule() : _module);
+      }
+      print('=====deeplink url: $_deeplinkRoute and canRoute: $canRoute');
+      if(!canRoute || _deeplinkRoute != null) {
+        return;
+      }
+
+      bool isMaintenanceMode = _configModel!.maintenanceMode!;
+      bool isInMaintenance = MaintenanceHelper.isMaintenanceEnable();
+
+      splashServiceInterface.handleInitialTopicSubscription();
+      if (isInMaintenance && handleMaintenanceMode) {
+        Get.offNamed(RouteHelper.getUpdateRoute(false));
+        _onRemoveLoader();
+        update();
+        return;
+      } else if (handleMaintenanceMode && ((Get.currentRoute.contains(RouteHelper.update) && !isMaintenanceMode) || !isInMaintenance)) {
+          Get.offNamed(RouteHelper.getInitialRoute());
+        }
+
+
+      if(fromMainFunction) {
+        _mainConfigRouting();
+      } else if (fromDemoReset) {
+        Get.offAllNamed(RouteHelper.getInitialRoute(fromSplash: true));
+      } else if (!fromSplash) {
+        route(body: notificationBody);
+      } else if (!_splashRouted) {
+        _splashRouted = true;
+        route(body: notificationBody);
+      }
+      _onRemoveLoader();
+    }else {
+      if(response.statusText == ApiClient.noInternetMessage) {
+        _hasConnection = false;
+      }
+    }
+    update();
+  }
+
+  Future<void> _mainConfigRouting() async {
+    if(GetPlatform.isWeb) {
+      bool isInMaintenance = MaintenanceHelper.isMaintenanceEnable();
+
+      if (isInMaintenance) {
+        Get.offNamed(RouteHelper.getUpdateRoute(false));
+      }
+    }
+    if (Get.find<AuthController>().isLoggedIn()) {
+      Get.find<AuthController>().updateToken();
+      if(Get.find<SplashController>().module != null && Get.find<SplashController>().module!.moduleType.toString() != AppConstants.ride ) {
+        await Get.find<FavouriteController>().getFavouriteList();
+      }
+    }
+  }
+
+  void _onRemoveLoader() {
+    final preloader = html.document.querySelector('.preloader');
+    if (preloader != null) {
+      preloader.remove();
+    }
+  }
+
+
+
+  Future<void> initSharedData() async {
+    if(!GetPlatform.isWeb) {
+      _module = null;
+      splashServiceInterface.initSharedData();
+    }else {
+      _module = await splashServiceInterface.initSharedData();
+    }
+    _cacheModule = splashServiceInterface.getCacheModule();
+    setModule(_module, notify: false);
+  }
+
+  void setCacheConfigModule(ModuleModel? cacheModule) {
+    _configModel!.moduleConfig!.module = Module.fromJson(_data!['module_config'][cacheModule!.moduleType]);
+  }
+
+  bool? showIntro() {
+    return splashServiceInterface.showIntro();
+  }
+
+  void disableIntro() {
+    splashServiceInterface.disableIntro();
+  }
+
+  bool showLoginSuggestion() {
+    return splashServiceInterface.showLoginSuggestion();
+  }
+
+  void disableLoginSuggestion() {
+    splashServiceInterface.disableLoginSuggestion();
+  }
+
+  void setFirstTimeConnectionCheck(bool isChecked) {
+    _firstTimeConnectionCheck = isChecked;
+  }
+
+  /// Activates the module with [moduleId], loading the module list first if it
+  /// has not been fetched. Returns false when the id is not among the available
+  /// modules, leaving the current module untouched.
+  ///
+  /// Replaces a loop that three call sites hand-rolled:
+  ///
+  /// ```dart
+  /// int i = 0;
+  /// for(i = 0; i < moduleList!.length; i++) {
+  ///   if(wantedId == moduleList![i].id) break;
+  /// }
+  /// setModule(moduleList![i]);   // i == length when the id is absent
+  /// ```
+  ///
+  /// When the id was not in the list the loop ran to completion and the index
+  /// landed one past the end, so `moduleList![i]` threw `RangeError` — and
+  /// `moduleList!` threw outright if `getModules()` came back empty. Both fired
+  /// inside `async` button handlers, where Flutter swallows the exception, so the
+  /// button simply did nothing: no snackbar, no navigation, no error.
+  Future<bool> activateModuleById(int? moduleId) async {
+    if(moduleId == null) return false;
+
+    // Refreshed unconditionally, exactly as the loops this replaces did. Reusing an
+    // already-loaded list would change behaviour: a list left over from a previous
+    // zone can be missing the module the cart needs, and the old code recovered
+    // from that by refetching every time.
+    await getModules();
+
+    final List<ModuleModel>? modules = _moduleList;
+    if(modules == null || modules.isEmpty) return false;
+
+    final int index = modules.indexWhere((ModuleModel module) => module.id == moduleId);
+    if(index == -1) return false;
+
+    await setModule(modules[index]);
+    return true;
+  }
+
+  Future<void> setModule(ModuleModel? module, {bool notify = true, bool fromModuleDialog = false}) async {
+    _module = module;
+    splashServiceInterface.setModule(module);
+    if(module != null) {
+      // Deliberately no clearBanner() here: most callers set the module only to open
+      // a detail page (store/item/category) and never reload home data — clearing
+      // left the module page's banner slider stuck on its shimmer on return. The
+      // genuine-switch flows clear and reload themselves (switchModule and the
+      // deep-link path via clearDataNull + HomeScreen.loadData).
+      ShallowRouterHelper.updateParameter('module', module.slug != null ? module.slug.toString() : module.id.toString());
+      if(_configModel != null) {
+        _configModel!.moduleConfig!.module = Module.fromJson(_data!['module_config'][module.moduleType]);
+      }
+      _cacheModule = await splashServiceInterface.setCacheModule(module);
+      // The promotion broadcast topic is scoped to zone AND module, so switching vertical
+      // moves the device to the new module's topic and leaves the old one.
+      NotificationTopicHelper.syncCustomerTopic();
+      if((AuthHelper.isLoggedIn() || AuthHelper.isGuestLoggedIn()) && cacheModule != null) {
+        if(cacheModule!.moduleType.toString() == AppConstants.service) {
+          Get.find<ServiceCartController>().getServiceCartGroups();
+          Get.find<BookingController>().getDashboardRunningBookings();
+        } else {
+          Get.find<CartController>().getAllCarts();
+        }
+      }
+    }
+
+    if(_cacheModule != null && _cacheModule!.moduleType.toString() == AppConstants.taxi) {
+      Get.find<TaxiCartController>().getCarCartList();
+    }
+
+    if(AuthHelper.isLoggedIn()) {
+      if(Get.find<SplashController>().module != null) {
+        Get.find<HomeController>().getCashBackOfferList();
+        if(Get.find<ProfileController>().userInfoModel?.proStatus ?? false) {
+          Get.find<ProController>().getProActiveOffer(moduleType: module?.moduleType);
+        }
+        if(module?.moduleType.toString() == AppConstants.taxi) {
+          Get.find<TaxiFavouriteController>().getFavouriteTaxiList();
+        } else if(module?.moduleType.toString() != AppConstants.ride) {
+          Get.find<FavouriteController>().getFavouriteList();
+        }
+      } else if (_cacheModule != null && _cacheModule!.moduleType.toString() == AppConstants.taxi){
+        Get.find<TaxiCartController>().getCarCartList();
+      }
+    }
+    if(notify) {
+      update();
+    }
+  }
+
+  /// A missing or unknown [moduleType] used to blow up on `Module.fromJson(null)` with
+  /// a `Null is not a subtype of Map` cast error — a whole screen lost to one row whose
+  /// item carries no module. Falls back to the active module's config, then to an empty one.
+  Module getModuleConfig(String? moduleType) {
+    final dynamic moduleConfig = _data?['module_config'];
+    dynamic config = (moduleConfig is Map && moduleType != null) ? moduleConfig[moduleType] : null;
+    if(config is! Map) {
+      final String? activeType = _module?.moduleType ?? _cacheModule?.moduleType;
+      config = (moduleConfig is Map && activeType != null) ? moduleConfig[activeType] : null;
+    }
+
+    final Module module = config is Map
+        ? Module.fromJson(Map<String, dynamic>.from(config)) : Module();
+    module.newVariation = moduleType == 'food';
+    return module;
+  }
+
+  Future<bool> getModules({Map<String, String>? headers, DataSourceEnum dataSource = DataSourceEnum.local}) async {
+    _moduleIndex = 0;
+    List<ModuleModel>? moduleList;
+    if(dataSource == DataSourceEnum.local) {
+      moduleList = await splashServiceInterface.getModules(headers: headers, source: DataSourceEnum.local);
+      getModules(headers: headers, dataSource: DataSourceEnum.client);
+      return _prepareModuleList(moduleList);
+    } else {
+      moduleList = await splashServiceInterface.getModules(headers: headers, source: DataSourceEnum.client);
+      return _prepareModuleList(moduleList);
+    }
+
+  }
+
+  bool _prepareModuleList(List<ModuleModel>? moduleList) {
+    if (moduleList != null) {
+      _moduleList = [];
+      for (var module in moduleList) {
+        if(module.moduleType != AppConstants.taxi && module.moduleType != AppConstants.ride && GetPlatform.isWeb) {
+          _moduleList!.add(module);
+        } else if(!GetPlatform.isWeb) {
+          _moduleList!.add(module);
+        }
+      }
+      update();
+      return true;
+    } else {
+      update();
+      return false;
+    }
+  }
+
+  Future<void> _showInterestPage() async {
+    // Guard against a not-yet-loaded profile / module — previously these were
+    // force-unwrapped, so a null here threw and aborted switchModule before the
+    // module's home data (HomeScreen.loadData) could load.
+    final user = Get.find<ProfileController>().userInfoModel;
+    final ModuleModel? module = _module;
+    if(user == null || module == null) {
+      return;
+    }
+    final String moduleType = module.moduleType?.toString() ?? '';
+    final bool isInterestModule = moduleType == AppConstants.food || moduleType == AppConstants.pharmacy || moduleType == AppConstants.grocery || moduleType == AppConstants.ecommerce;
+    final bool alreadySelected = user.selectedModuleForInterest?.contains(module.id) ?? false;
+    if(!isInterestModule || alreadySelected) {
+      return;
+    }
+
+    await Get.find<CategoryController>().getCategoryList(true, allCategory: false).then((_) async {
+      if(Get.find<CategoryController>().categoryList != null && Get.find<CategoryController>().categoryList!.isNotEmpty){
+        await Get.toNamed(RouteHelper.getPreferenceRoute());
+      }else{
+        Get.offAllNamed(RouteHelper.getInitialRoute());
+      }
+    });
+  }
+
+  void switchModule(int index, bool fromPhone) async {
+    if(_module == null || _module!.id != _moduleList![index].id) {
+      // ShadowRouterHelper.updateParameter('module_id', _moduleList![index].id.toString());
+
+      // Mark this switch. setModule's synchronous prefix still updates _module +
+      // the module_id header immediately (so the view/header stay correct), but any
+      // work after an await is skipped if a newer switch has since started.
+      final int token = ++_moduleSwitchToken;
+      final ModuleModel target = _moduleList![index];
+
+      // Must precede the await: the tab repaints long before setModule returns.
+      if(target.moduleType.toString() != AppConstants.taxi) {
+        _clearModuleScopedData();
+      }
+
+      await Get.find<SplashController>().setModule(target);
+
+      // A newer switch superseded this one while we awaited — don't clear caches or
+      // load data for a module that's no longer selected.
+      if(token != _moduleSwitchToken) return;
+
+      if(_module!.moduleType.toString() != AppConstants.taxi) {
+        // No cart or cashback fetch here: the awaited setModule above already issues
+        // both for this module. Re-issuing them downloaded each payload twice, and
+        // getAllCarts' _allCartsGeneration guard then discarded the second response
+        // outright — the request was pure waste.
+
+        if(AuthHelper.isLoggedIn()) {
+          // Defensive: the interest page must never block/skip the module data load.
+          try {
+            await _showInterestPage();
+          } catch(_) {}
+          // Re-check after the awaited interest page.
+          if(token != _moduleSwitchToken) return;
+        }
+
+        // Debounce the heavy load so continuous switching only fetches the module
+        // the user lands on (avoids overlapping, wrong-module API responses).
+        _moduleLoadDebounce?.cancel();
+        _moduleLoadDebounce = Timer(const Duration(milliseconds: 350), () {
+          if(token == _moduleSwitchToken) {
+            HomeScreen.loadData(true, fromModule: true);
+          }
+        });
+      } else {
+        if(AuthHelper.isLoggedIn()) {
+          Get.find<HomeController>().getCashBackOfferList();
+        }
+        Get.find<TaxiCartController>().getCarCartList();
+      }
+    }
+  }
+
+  void _clearModuleScopedData() {
+    Get.find<ItemController>().clearItemLists();
+    Get.find<BannerController>().clearBanner();
+    Get.find<CategoryController>().clearCategoryList();
+    Get.find<CampaignController>().itemAndBasicCampaignNull();
+    Get.find<FlashSaleController>().setEmptyFlashSale(fromModule: true);
+    Get.find<StoreController>().clearModuleStoreLists();
+    Get.find<BogoOfferController>().clearBogoHomeData();
+    Get.find<BundleController>().clearBundleHomeData();
+    // These fetch only when scrolled to, so a stale list can sit on screen for long.
+    Get.find<ReelsController>().clearReels();
+    Get.find<BrandsController>().clearBrandList();
+    Get.find<AdvertisementController>().clearAdvertisementList();
+    Get.find<OrderController>().clearLastOrders();
+  }
+
+  ModuleModel? getCacheModule() {
+    return splashServiceInterface.getCacheModule();
+  }
+
+  void setModuleIndex(int index) {
+    _moduleIndex = index;
+    update();
+  }
+
+  void removeModule() {
+    setModule(null);
+    Get.find<BannerController>().getFeaturedBanner();
+    getModules();
+    Get.find<HomeController>().forcefullyNullCashBackOffers();
+    if(AuthHelper.isLoggedIn()) {
+      Get.find<AddressController>().getAddressList();
+    }
+    Get.find<StoreController>().getFeaturedStoreList();
+    Get.find<CampaignController>().itemAndBasicCampaignNull();
+    if(_deeplinkRoute != null) {
+      setDeeplink(null);
+      HomeScreen.loadData(false);
+    }
+  }
+
+  Future<void> removeCacheModule() async {
+    _cacheModule = await splashServiceInterface.setCacheModule(null);
+  }
+
+  Future<bool> subscribeMail(String email) async {
+    _isLoading = true;
+    update();
+    ResponseModel responseModel = await splashServiceInterface.subscribeEmail(email);
+    if (responseModel.isSuccess) {
+      showCustomSnackBar(responseModel.message, isError: false);
+    }else {
+      showCustomSnackBar(responseModel.message, isError: true);
+    }
+    _isLoading = false;
+    update();
+    return responseModel.isSuccess;
+  }
+
+  void saveCookiesData(bool data) {
+    splashServiceInterface.saveCookiesData(data);
+    _savedCookiesData = true;
+    update();
+  }
+
+  void getCookiesData(){
+    _savedCookiesData = splashServiceInterface.getSavedCookiesData();
+    update();
+  }
+
+  void cookiesStatusChange(String? data) {
+    splashServiceInterface.cookiesStatusChange(data);
+  }
+
+  bool getAcceptCookiesStatus(String data) => splashServiceInterface.getAcceptCookiesStatus(data);
+
+
+  void saveWebSuggestedLocationStatus(bool data) {
+    splashServiceInterface.saveSuggestedLocationStatus(data);
+    _webSuggestedLocation = true;
+    update();
+  }
+
+  void getWebSuggestedLocationStatus(){
+    _webSuggestedLocation = splashServiceInterface.getSuggestedLocationStatus();
+  }
+
+  void setRefreshing(bool status) {
+    _isRefreshing = status;
+    update();
+  }
+
+  void saveReferBottomSheetStatus(bool data) {
+    splashServiceInterface.saveReferBottomSheetStatus(data);
+    _showReferBottomSheet = data;
+    update();
+  }
+
+  void getReferBottomSheetStatus(){
+    _showReferBottomSheet = splashServiceInterface.getReferBottomSheetStatus();
+  }
+
+  void saveRenewBottomSheetStatus(bool data) {
+    _showRenewBottomSheet = data;
+    update();
+  }
+
+  var hoverStates = <bool>[];
+
+  void setHover(int index, bool state) {
+    hoverStates[index] = state;
+    update();
+  }
+
+  void clearDataNull(ModuleModel foundModule) {
+    if(foundModule.moduleType.toString() != AppConstants.taxi) {
+      Get.find<CartController>().getAllCarts();
+      Get.find<ItemController>().clearItemLists();
+      Get.find<BannerController>().clearBanner();
+      Get.find<CategoryController>().clearCategoryList();
+      Get.find<CampaignController>().itemAndBasicCampaignNull();
+      Get.find<FlashSaleController>().setEmptyFlashSale(fromModule: true);
+    }
+  }
+
+  /////===================
+
+  String? _pusherConnectionStatus;
+  String? get pusherConnectionStatus => _pusherConnectionStatus;
+
+  void setPusherStatus(String? connection){
+    _pusherConnectionStatus = connection;
+  }
+
+  Future<void> fetchAppDownloadSection() async {
+    AppDownloadSectionModel? appDownloadSectionModel = await splashServiceInterface.getAppDownloadSection();
+    if (appDownloadSectionModel == null) return;
+    _appDownloadSection = appDownloadSectionModel;
+    update();
+  }
+
+  DownloadUserAppLinks? get links => _appDownloadSection?.downloadUserAppLinks;
+
+  String get appDownloadQrUrl {
+    if (links?.appleStoreUrl?.isNotEmpty ?? false) return links!.appleStoreUrl!;
+    if (links?.playstoreUrl?.isNotEmpty ?? false) return links!.playstoreUrl!;
+    return '';
+  }
+
+  bool get showAppDownloadSection => (links?.playstoreUrl?.isNotEmpty ?? false) && (links?.appleStoreUrl?.isNotEmpty ?? false);
+
+}
