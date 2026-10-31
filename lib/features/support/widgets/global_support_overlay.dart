@@ -32,8 +32,7 @@ class GlobalSupportOverlay extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    if (callActive &&
-        Get.find<SupportSipCallController>().isCallMinimized) {
+    if (callActive && Get.find<SupportSipCallController>().isCallMinimized) {
       return const SizedBox.shrink();
     }
 

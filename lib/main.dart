@@ -145,6 +145,37 @@ class _MyAppState extends State<MyApp> {
   String? _initialRoute;
   final ValueNotifier<String> _currentRoute = ValueNotifier<String>('');
 
+  bool _shouldHideSupportOverlay(String route) {
+    final String normalizedRoute = route.toLowerCase();
+    const List<String> excludedRoutes = <String>[
+      RouteHelper.cart,
+      RouteHelper.globalCart,
+      RouteHelper.store,
+      RouteHelper.allStores,
+      RouteHelper.allStoresScreen,
+      RouteHelper.bestStoresNearby,
+      RouteHelper.popularStores,
+      RouteHelper.featuredStores,
+      RouteHelper.topOffers,
+      RouteHelper.recommendedStores,
+      RouteHelper.newStores,
+      RouteHelper.checkout,
+    ];
+
+    if (excludedRoutes.any(
+      (String excluded) => normalizedRoute.startsWith(excluded.toLowerCase()),
+    )) {
+      return true;
+    }
+
+    final String? moduleType = Get.isRegistered<SplashController>()
+        ? Get.find<SplashController>().module?.moduleType
+        : null;
+    return moduleType == AppConstants.food ||
+        moduleType == AppConstants.grocery ||
+        moduleType == AppConstants.pharmacy;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -312,9 +343,6 @@ class _MyAppState extends State<MyApp> {
                                             route.startsWith(
                                               RouteHelper.orderTracking,
                                             );
-                                        final bool isModuleDashboard =
-                                            route == RouteHelper.initial ||
-                                            route.startsWith(RouteHelper.main);
                                         return ValueListenableBuilder<bool>(
                                           valueListenable:
                                               HomeStatusBarTint.modalOpen,
@@ -322,7 +350,9 @@ class _MyAppState extends State<MyApp> {
                                             return GlobalSupportOverlay(
                                               isVisible:
                                                   !modalOpen &&
-                                                  isModuleDashboard &&
+                                                  !_shouldHideSupportOverlay(
+                                                    route,
+                                                  ) &&
                                                   !isMapRoute &&
                                                   !route.startsWith(
                                                     RouteHelper.orderDetails,
