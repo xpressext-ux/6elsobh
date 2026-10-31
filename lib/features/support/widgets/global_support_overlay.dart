@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:sixam_mart/features/splash/controllers/splash_controller.dart';
 import 'package:sixam_mart/features/support/controllers/support_sip_call_controller.dart';
 import 'package:sixam_mart/features/support/screens/support_sip_call_screen.dart';
 import 'package:sixam_mart/features/support/widgets/support_help_floating_button.dart';
@@ -25,14 +24,10 @@ class GlobalSupportOverlay extends StatelessWidget {
     final bool callActive =
         Get.isRegistered<SupportSipCallController>() &&
         Get.find<SupportSipCallController>().hasActiveCall;
-    final bool enabled =
-        Get.isRegistered<SplashController>() &&
-        Get.find<SplashController>().configModel?.supportVoiceEnabled == true;
     final bool keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     if ((!isVisible && !callActive) ||
         !GetPlatform.isMobile ||
-        (!enabled && !callActive) ||
         (keyboardVisible && !callActive)) {
       return const SizedBox.shrink();
     }
